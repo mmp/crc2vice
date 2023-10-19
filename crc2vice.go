@@ -186,8 +186,10 @@ func main() {
 		errorExit(fmt.Sprintf("%s: unable to read file", path), err)
 
 		var gj GeoJSON
-		err = json.Unmarshal(file, &gj)
-		errorExit(path+": unable to read GEOJson file", err)
+		err = UnmarshalJSON(file, &gj)
+		if err != nil {
+			fmt.Printf(path+": warning: " + err.Error())
+		}
 
 		var lines []Point2LL
 		for _, f := range gj.Features {
@@ -233,4 +235,40 @@ func main() {
 
 	writeJSON(videoMaps, base+"-videomaps.json")
 	writeJSON(mapSpecs, base+".info")
+}
+
+// Unmarshal the bytes into the given type but go through some efforts to
+// return useful error messages when the JSON is invalid...
+func UnmarshalJSON[T any](b []byte, out *T) error {
+	err := json.Unmarshal(b, out)
+	if err == nil {
+		return nil
+	}
+
+	decodeOffset := func(offset int64) (line, char int) {
+		line, char = 1, 1
+		for i := 0; i < int(offset) && i < len(b); i++ {
+			if b[i] == '\n' {
+				line++
+				char = 1
+			} else {
+				char++
+			}
+		}
+		return
+	}
+
+	switch jerr := err.(type) {
+	case *json.SyntaxError:
+		line, char := decodeOffset(jerr.Offset)
+		return fmt.Errorf("Error at line %d, character %d: %v", line, char, jerr)
+
+	case *json.UnmarshalTypeError:
+		line, char := decodeOffset(jerr.Offset)
+		return fmt.Errorf("Error at line %d, character %d: %s value for %s.%s invalid for type %s",
+			line, char, jerr.Value, jerr.Struct, jerr.Field, jerr.Type.String())
+
+	default:
+		return err
+	}
 }
