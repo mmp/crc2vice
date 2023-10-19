@@ -178,6 +178,10 @@ func main() {
 			return nil
 		}
 
+		if !strings.Contains(path, base) {
+			return nil
+		}
+
 		file, err := os.ReadFile(path)
 		errorExit(fmt.Sprintf("%s: unable to read file", path), err)
 
@@ -209,6 +213,7 @@ func main() {
 				break
 			}
 		}
+		fmt.Printf("Reading ARTCC: %s", name)
 		if name == "" {
 			fmt.Fprintf(os.Stderr, "%s: id not found in video map specs", fileid)
 			os.Exit(1)
