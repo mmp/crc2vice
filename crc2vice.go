@@ -174,60 +174,60 @@ func main() {
 	videoMaps := make(map[string][]Point2LL)
 
 	err = fs.WalkDir(os.DirFS("."), path.Join("VideoMaps", base),
-	    func(path string, d fs.DirEntry, err error) error {
-		errorExit("error walking VideoMaps directory", err)
-		fmt.Printf("\rReading " + path + ": ")
-		fmt.Printf(".")
+		func(path string, d fs.DirEntry, err error) error {
+			errorExit("error walking VideoMaps directory", err)
+			fmt.Printf("\rReading " + path + ": ")
+			fmt.Printf(".")
 
-		if filepath.Ext(path) != ".geojson" {
-			return nil
-		}
-
-		if !strings.Contains(path, base) {
-			return nil
-		}
-
-		fileid, _ := strings.CutSuffix(filepath.Base(path), ".geojson")
-		name, ok := idToName[fileid]
-		if !ok {
-			// This video map isn't used by the ARTCC
-			return nil
-		}
-
-		file, err := os.ReadFile(path)
-		errorExit(fmt.Sprintf("%s: unable to read file", path), err)
-
-		var gj GeoJSON
-		err = UnmarshalJSON(file, &gj)
-		if err != nil {
-			fmt.Printf("\r"+path+": warning: " + err.Error()+"\n")
-		}
-
-		var lines []Point2LL
-		for _, f := range gj.Features {
-			if f.Type != "Feature" {
-				continue
+			if filepath.Ext(path) != ".geojson" {
+				return nil
 			}
 
-			if f.Geometry.Type != "LineString" {
-				continue
+			if !strings.Contains(path, base) {
+				return nil
 			}
 
-			c := f.Geometry.Coordinates
-			for i := 0; i < len(c)-1; i++ {
-				lines = append(lines, c[i], c[i+1])
+			fileid, _ := strings.CutSuffix(filepath.Base(path), ".geojson")
+			name, ok := idToName[fileid]
+			if !ok {
+				// This video map isn't used by the ARTCC
+				return nil
 			}
-		}
 
-		if _, ok := videoMaps[name]; ok {
-			fmt.Fprintf(os.Stderr, "%s: multiple definitions\n", name)
-			// FIXME: append here or?
-			// os.Exit(1)
-		}
-		videoMaps[name] = lines
+			file, err := os.ReadFile(path)
+			errorExit(fmt.Sprintf("%s: unable to read file", path), err)
 
-		return nil
-	})
+			var gj GeoJSON
+			err = UnmarshalJSON(file, &gj)
+			if err != nil {
+				fmt.Printf("\r" + path + ": warning: " + err.Error() + "\n")
+			}
+
+			var lines []Point2LL
+			for _, f := range gj.Features {
+				if f.Type != "Feature" {
+					continue
+				}
+
+				if f.Geometry.Type != "LineString" {
+					continue
+				}
+
+				c := f.Geometry.Coordinates
+				for i := 0; i < len(c)-1; i++ {
+					lines = append(lines, c[i], c[i+1])
+				}
+			}
+
+			if _, ok := videoMaps[name]; ok {
+				fmt.Fprintf(os.Stderr, "%s: multiple definitions\n", name)
+				// FIXME: append here or?
+				// os.Exit(1)
+			}
+			videoMaps[name] = lines
+
+			return nil
+		})
 	errorExit("error walking VideoMaps directory", err)
 	fmt.Printf("\rRead video maps                                               \n")
 
