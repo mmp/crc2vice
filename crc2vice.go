@@ -11,6 +11,7 @@ import (
 	"io/fs"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -90,6 +91,7 @@ func floor(v float32) float32 {
 }
 
 func writeJSON(v any, fn string) {
+	fmt.Printf("Writing %s... ", fn)
 	var w bytes.Buffer
 	enc := json.NewEncoder(&w)
 	enc.SetIndent("", "    ")
@@ -97,7 +99,7 @@ func writeJSON(v any, fn string) {
 	errorExit("JSON error", err)
 	err = os.WriteFile(fn, w.Bytes(), 0o644)
 	errorExit("writing file", err)
-	fmt.Printf("Wrote %s\n", fn)
+	fmt.Printf("Done.\n")
 }
 
 type Point2LL [2]float32
@@ -155,6 +157,7 @@ func main() {
 	fmt.Printf("Read ARTCC definition: %s\n", fn)
 
 	var mapSpecs []ViceMapSpec
+	idToName := make(map[string]string)
 	for _, m := range artcc.VideoMaps {
 		group := 1
 		if m.Category == "A" {
@@ -165,11 +168,13 @@ func main() {
 			Label: m.ShortName,
 			Name:  m.Name,
 		})
+		idToName[m.Id] = m.Name
 	}
 
 	videoMaps := make(map[string][]Point2LL)
 
-	err = fs.WalkDir(os.DirFS("."), "VideoMaps", func(path string, d fs.DirEntry, err error) error {
+	err = fs.WalkDir(os.DirFS("."), path.Join("VideoMaps", base),
+	    func(path string, d fs.DirEntry, err error) error {
 		errorExit("error walking VideoMaps directory", err)
 		fmt.Printf("\rReading " + path + ": ")
 		fmt.Printf(".")
@@ -182,13 +187,20 @@ func main() {
 			return nil
 		}
 
+		fileid, _ := strings.CutSuffix(filepath.Base(path), ".geojson")
+		name, ok := idToName[fileid]
+		if !ok {
+			// This video map isn't used by the ARTCC
+			return nil
+		}
+
 		file, err := os.ReadFile(path)
 		errorExit(fmt.Sprintf("%s: unable to read file", path), err)
 
 		var gj GeoJSON
 		err = UnmarshalJSON(file, &gj)
 		if err != nil {
-			fmt.Printf(path+": warning: " + err.Error())
+			fmt.Printf("\r"+path+": warning: " + err.Error()+"\n")
 		}
 
 		var lines []Point2LL
@@ -205,20 +217,6 @@ func main() {
 			for i := 0; i < len(c)-1; i++ {
 				lines = append(lines, c[i], c[i+1])
 			}
-		}
-
-		fileid, _ := strings.CutSuffix(filepath.Base(path), ".geojson")
-		var name string
-		for _, mapspec := range artcc.VideoMaps {
-			if mapspec.Id == fileid {
-				name = mapspec.Name
-				break
-			}
-		}
-		fmt.Printf("Reading ARTCC: %s", name)
-		if name == "" {
-			fmt.Fprintf(os.Stderr, "%s: id not found in video map specs", fileid)
-			os.Exit(1)
 		}
 
 		if _, ok := videoMaps[name]; ok {
